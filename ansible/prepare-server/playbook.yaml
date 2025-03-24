@@ -1,0 +1,187 @@
+---
+- name: Prepare bootstrap server
+  hosts: servers
+  gather_facts: true
+  remote_user: jitse
+  become: true
+
+  vars_files:
+    - vars/dnsmasq.yml
+
+  vars:
+    domain: "demo.local"
+    server_ip: "10.42.0.2"
+    dhcp_default_route: "10.42.0.1"
+    dhcp_lease_time: 1h
+    dhcp_range_start: "10.42.0.3"
+    dhcp_range_end: "10.42.0.250"
+    target_mac: "52:54:00:4c:7a:d1"
+    network_connections:
+      - name: static-network
+        type: ethernet
+        autoconnect: true
+        mac: "{{ target_mac }}"
+        state: up
+        persistent_state: present
+        ip:
+          dhcp4: false
+          gateway4: "10.42.0.1"
+          dns:
+            - "{{ server_ip }}"
+          dns_search:
+            - "{{ domain }}"
+          address:
+            - "{{ server_ip }}/24"
+    network_allow_restart: true
+    dhcp_hosts:
+      - mac: "52:54:00:4c:7a:d4"
+        hostname: "client01"
+      - mac: "52:54:00:4c:7c:a1"
+        hostname: "client02"
+
+  roles:
+    - role: rhel-system-roles.network
+
+  tasks:
+    - name: Store name of secondary network interface
+      ansible.builtin.set_fact:
+        dnsmasq_interface: "{{ ansible_interfaces | difference(['lo', ansible_default_ipv4.alias]) | sort | first }}"
+
+    - name: Install packages
+      ansible.builtin.package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - dnsmasq
+        - firewalld
+        - httpd
+        - syslinux
+        - tftp-server
+
+    - name: Configure dnsmasq
+      ansible.builtin.template:
+        src: dnsmasq.conf.j2
+        mode: "0644"
+        dest: /etc/dnsmasq.conf
+    - name: Add dhcp_hosts to dnsmasq configuration
+      ansible.builtin.template:
+        src: dhcp_hosts.conf.j2
+        mode: "0644"
+        dest: /etc/dnsmasq.d/hosts.conf
+
+    - name: Ensure firewall ports are open
+      ansible.posix.firewalld:
+        service: "{{ item }}"
+        permanent: true
+        state: enabled
+        immediate: true
+      loop:
+        - dhcp
+        - dns
+        - tftp
+        - http
+
+    - name: Create /var/lib/tftpboot/ directory
+      ansible.builtin.file:
+        state: directory
+        path: /var/lib/tftpboot/
+        owner: dnsmasq
+        group: dnsmasq
+        mode: "0755"
+
+    - name: Copy syslinux files
+      ansible.builtin.copy:
+        remote_src: true
+        owner: dnsmasq
+        group: dnsmasq
+        mode: "0644"
+        src: /usr/share/syslinux/
+        dest: /var/lib/tftpboot/
+      notify:
+        - Restore tftboot SELinux context
+
+    - name: Ensure /var/lib/tftpboot/ is accessible
+      ansible.builtin.file:
+        state: directory
+        path: /var/lib/tftpboot/
+        owner: dnsmasq
+        group: dnsmasq
+        mode: "0755"
+
+    - name: Create pxelinux.cfg directory
+      ansible.builtin.file:
+        state: directory
+        path: /var/lib/tftpboot/pxelinux.cfg
+        owner: dnsmasq
+        group: dnsmasq
+        mode: "0755"
+
+    - name: Create default file
+      ansible.builtin.template:
+        src: pxelinux.cfg.j2
+        dest: /var/lib/tftpboot/pxelinux.cfg/default
+        owner: dnsmasq
+        group: dnsmasq
+        mode: "0644"
+
+    - name: Ensure tft image directory exists
+      ansible.builtin.file:
+        state: directory
+        path: /var/lib/tftpboot/images/EL9
+        owner: dnsmasq
+        group: dnsmasq
+        mode: "0755"
+
+    - name: Fetch EL9 tftp images
+      ansible.builtin.get_url:
+        url: "{{ item }}"
+        dest: /var/lib/tftpboot/images/EL9/
+        owner: dnsmasq
+        group: dnsmasq
+        mode: "0644"
+      loop:
+        - https://mirror.stream.centos.org/9-stream/BaseOS/x86_64/os/images/pxeboot/vmlinuz
+        - https://mirror.stream.centos.org/9-stream/BaseOS/x86_64/os/images/pxeboot/initrd.img
+      notify: Restore tftboot SELinux context
+
+    - name: Start dnsmasq service
+      ansible.builtin.systemd:
+        name: dnsmasq
+        state: started
+        enabled: true
+
+    - name: Ensure httpd is running
+      ansible.builtin.service:
+        name: httpd
+        state: started
+        enabled: true
+
+    - name: Ensure httpd content dirs exist
+      ansible.builtin.file:
+        state: directory
+        path: /var/www/html/{{ item }}
+        mode: "0755"
+      loop:
+        - ks
+        - images
+      notify: Restore httpd SELinux context
+
+    - name: Place EL9 kickstart file
+      ansible.builtin.template:
+        src: el9.ks.j2
+        dest: /var/www/html/ks/el9.cfg
+        mode: "0644"
+      notify: Restore httpd SELinux context
+
+    - name: Fetch EL9 images for httpd
+      ansible.builtin.get_url:
+        url: https://mirror.stream.centos.org/9-stream/BaseOS/x86_64/os/images/install.img
+        dest: /var/www/html/images/
+        mode: "0644"
+      notify: Restore httpd SELinux context
+
+  handlers:
+    - name: Restore tftboot SELinux context
+      ansible.builtin.shell: restorecon -Rv /var/lib/tftpboot
+    - name: Restore httpd SELinux context
+      ansible.builtin.shell: restorecon -Rv /var/www/html

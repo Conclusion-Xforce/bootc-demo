@@ -1,0 +1,12 @@
+default menu.c32
+prompt 0
+timeout 600
+
+label linux
+  menu label ^Install system
+  menu default
+  kernel images/EL9/vmlinuz
+  append initrd=images/EL9/initrd.img inst.ks=http://{{ server_ip }}/ks/el9.cfg inst.stage2=http://{{ server_ip }}
+label local
+  menu label Boot from ^local drive
+  localboot 0xffff

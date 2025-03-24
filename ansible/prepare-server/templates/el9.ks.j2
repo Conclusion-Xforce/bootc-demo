@@ -1,0 +1,27 @@
+%pre
+mkdir -p /etc/containers/registries.conf.d/
+cat > /etc/containers/registries.conf.d/local-registry.conf << 'EOF'
+[[registry]]
+location="{{ server_ip }}:8080"
+insecure=true
+EOF
+%end
+
+# enable text mode
+text
+# network configuration
+network --bootproto=dhcp --device=link --activate
+# Partioning Setup
+clearpart --all --initlabel --disklabel=gpt
+reqpart --add-boot
+part / --grow --fstype xfs
+# --- Container Image Installation --
+ostreecontainer --url {{ server_ip }}:8080/bootc/el9:stable
+# --- Basic Security ---
+services --enabled=sshd # Enable SSH service for remote access
+# --- Root User SSH Key (If Desired)---
+rootpw --iscrypted locked #Disable direct root password login
+# Add SSH key for root (replace with your key)
+sshkey --username root "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCRBph1X7ff+zkSMdsmrSqIDlEUkveH4pNptvrQ6hob6pifTUCW4R1UVLgcDPQPYRDXlsSs3mEjGUQF8lGZujrg620FckmTfziL/HFVvoK2R37kFg8SNiHVMkhzJShkmgC+H4yTdzroW2rpQa8ZsS4XLzfVmU3ntQPawkrgT5D/bGwjjAcc6YM+tfFd2n7Q16ZaWLClrKQd4ObgmZabXJSWYuSBL/HDuy0ssM/MPsQzLLrv0WKaLGIEIXeF37bcXszcsfZFGJmnlRSPyF+1v/+l1NfMm0eUZYzZd7kEEDZANVAS0gsnuIshDwFMt8k1+iA6JRwgqiqbYyji1ELg/AnMAqh5aRZu4qKYXOrgmpkD4XlMkQZPg3ObdLqfh1j00z+OvxaYzEma9hDUQyRras5+/CwH7JkNWPgDHtWGuQ1FkAQ1rESfQgynidVekKeFXpEsia9xtapplz045ezELvtHk/G8JZnHX/58gHsGFJZRQHGIrJ53W0fPepg/gBkjCec= jitse@bootstrap.lab.lan"
+# --- System Reboot ---
+reboot
