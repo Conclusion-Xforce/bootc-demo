@@ -1,4 +1,4 @@
 ---
 dnsmasq_lease_time: 12h
-dnsmasq_range_start: "10.42.0.2"
-dnsmasq_range_end: "10.42.0.250"
+dnsmasq_range_start: 10.42.0.2
+dnsmasq_range_end: 10.42.0.250
