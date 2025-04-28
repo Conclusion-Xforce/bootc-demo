@@ -9,13 +9,13 @@
     - vars/dnsmasq.yml
 
   vars:
-    domain: "demo.local"
-    server_ip: "10.42.0.2"
-    dhcp_default_route: "10.42.0.1"
+    domain: demo.local
+    server_ip: 10.42.0.2
+    dhcp_default_route: 10.42.0.1
     dhcp_lease_time: 1h
-    dhcp_range_start: "10.42.0.3"
-    dhcp_range_end: "10.42.0.250"
-    target_mac: "52:54:00:4c:7a:d1"
+    dhcp_range_start: 10.42.0.3
+    dhcp_range_end: 10.42.0.250
+    target_mac: 52:54:00:4c:7a:d1
     network_connections:
       - name: static-network
         type: ethernet
@@ -25,7 +25,7 @@
         persistent_state: present
         ip:
           dhcp4: false
-          gateway4: "10.42.0.1"
+          gateway4: 10.42.0.1
           dns:
             - "{{ server_ip }}"
           dns_search:
@@ -34,10 +34,10 @@
             - "{{ server_ip }}/24"
     network_allow_restart: true
     dhcp_hosts:
-      - mac: "52:54:00:4c:7a:d4"
-        hostname: "client01"
-      - mac: "52:54:00:4c:7c:a1"
-        hostname: "client02"
+      - mac: 52:54:00:4c:7a:d4
+        hostname: client01
+      - mac: 52:54:00:4c:7c:a1
+        hostname: client02
 
   roles:
     - role: rhel-system-roles.network
